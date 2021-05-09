@@ -11,6 +11,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import datetime
 import xlsxwriter
+import smtplib
+from email.mime.multipart import MIMEMultipart #email內容載體
+from email.mime.text import MIMEText #用於製作文字內文
+from email.mime.base import MIMEBase #用於承載附檔
+from email import encoders #用於附檔編碼
 
 # print (datetime.datetime.now())
 # 回推報表起終點時間, 預設每周一早上八點觸發, 因應時區加八小時
@@ -234,6 +239,7 @@ def status_analyzer(filtered_df, start_date):
     return report_dict
 
 
+print("製程分析結束")
 # 照日期切割DF子集
 # 生成週間每日日期
 dates = [''] * 8
@@ -331,6 +337,63 @@ line_chart.set_x_axis({'name': '日期'})
 line_chart.set_y_axis({'name': '分'})
 # column_chart.set_style(11)
 worksheet.insert_chart("J11", line_chart)
-
 # 存檔
 writer.save()
+print("報表生成完畢")
+
+# email發送
+# 預設本周要寄出上周一至周日的報告，故抓出上周一的日期
+today_date = datetime.date.today()
+days_to_mon = today_date.weekday()
+
+this_mon = today_date - datetime.timedelta(days = days_to_mon)
+last_mon = this_mon - datetime.timedelta(days = 7)
+
+
+# read the list of recipients
+f = open("list.txt")
+lines = f.read().splitlines()
+print(lines)
+
+# Email Account
+email_sender_account = "pythonnotificantionbot@gmail.com"  # your email
+email_sender_username = "pythonnotificantionbot@gmail.com"  # your email username
+email_sender_password = "tecopythonproject"  # your email password
+email_smtp_server = "smtp.gmail.com"  # change if not gmail.
+email_smtp_port = 587  # change if needed.
+email_recepients = lines  # your recipients
+f.close()
+
+#設定信件內容與收件人資訊
+Subject = "VPI3800稼動週報 ({})".format(last_mon)
+contents = """
+VPI3800稼動週報
+""".format(last_mon)
+
+# 設定附件（可設多個）
+attachments = ['含浸爐VPI3800設備稼動週報表.xlsx']
+
+server = smtplib.SMTP(email_smtp_server, email_smtp_port)
+print(f"Logging in to {email_sender_account}")
+server.starttls()
+server.login(email_sender_username, email_sender_password)
+
+for recipient in email_recepients:
+    print(f"Sending email to {recipient}")
+    message = MIMEMultipart()
+    message['From'] = email_sender_account
+    message['To'] = recipient
+    message['Subject'] = Subject
+    message.attach(MIMEText(contents))
+    for file in attachments:
+        with open(file, 'rb') as fp:
+            add_file = MIMEBase('application', "octet-stream")
+            add_file.set_payload(fp.read())
+            encoders.encode_base64(add_file)
+            add_file.add_header('Content-Disposition', 'attachment', filename='含浸爐VPI3800設備稼動週報表.xlsx')
+            message.attach(add_file)
+    server.sendmail(email_sender_account, recipient, message.as_string())
+
+
+server.quit()
+print("信件發送成功")
